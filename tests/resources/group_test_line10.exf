@@ -1,0 +1,126 @@
+EX Version: 3
+Region: /
+!#nodeset nodes
+Define node template: node1
+Shape. Dimension=0
+#Fields=1
+1) coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. #Values=2 (value,d/ds1)
+ y. #Values=2 (value,d/ds1)
+ z. #Values=2 (value,d/ds1)
+Node template: node1
+Node: 1
+  0.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 2
+  1.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 3
+  2.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 4
+  3.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 5
+  4.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 6
+  5.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 7
+  6.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 8
+  7.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 9
+  8.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 10
+  9.000000000000000e+00  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+Node: 11
+  1.000000000000000e+01  1.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+  0.000000000000000e+00  0.000000000000000e+00
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Define element template: element1
+Shape. Dimension=1, line
+#Scale factor sets=0
+#Nodes=2
+#Fields=1
+1) coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. c.Hermite, no modify, standard node based.
+  #Nodes=2
+  1. #Values=2
+   Value labels: value d/ds1
+  2. #Values=2
+   Value labels: value d/ds1
+ y. c.Hermite, no modify, standard node based.
+  #Nodes=2
+  1. #Values=2
+   Value labels: value d/ds1
+  2. #Values=2
+   Value labels: value d/ds1
+ z. c.Hermite, no modify, standard node based.
+  #Nodes=2
+  1. #Values=2
+   Value labels: value d/ds1
+  2. #Values=2
+   Value labels: value d/ds1
+Element template: element1
+Element: 1
+ Nodes:
+ 1 2
+Element: 2
+ Nodes:
+ 2 3
+Element: 3
+ Nodes:
+ 3 4
+Element: 4
+ Nodes:
+ 4 5
+Element: 5
+ Nodes:
+ 5 6
+Element: 6
+ Nodes:
+ 6 7
+Element: 7
+ Nodes:
+ 7 8
+Element: 8
+ Nodes:
+ 8 9
+Element: 9
+ Nodes:
+ 9 10
+Element: 10
+ Nodes:
+ 10 11
+Group name: all
+!#nodeset nodes
+Node group:
+1..11
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Element group:
+1..10
+Group name: marker
+Group name: part
+!#nodeset nodes
+Node group:
+6..9
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Element group:
+6..8
