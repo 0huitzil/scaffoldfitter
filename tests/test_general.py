@@ -1,8 +1,5 @@
-import logging
-import os
-import sys
-import unittest
-from cmlibs.utils.zinc.field import createFieldMeshIntegral
+from cmlibs.utils.zinc.field import (
+    create_field_mesh_integral, find_or_create_field_coordinates, find_or_create_field_group)
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.utils.zinc.region import copy_fitting_data, read_from_buffer, write_to_buffer
 from cmlibs.zinc.context import Context
@@ -12,6 +9,12 @@ from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterstepalign import FitterStepAlign
 from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
+import logging
+import math
+import os
+import sys
+import unittest
+
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -74,7 +77,7 @@ class GeneralTestCase(unittest.TestCase):
             # check number of active data points and length of fitted model
             activeDataNodeset = fitter.getActiveDataNodesetGroup()
             self.assertEqual(activeDataNodeset.getSize(), expectedActiveDataSize)
-            lengthField = createFieldMeshIntegral(coordinates, fitter.getMesh(1), number_of_points=4)
+            lengthField = create_field_mesh_integral(coordinates, fitter.getMesh(1), number_of_points=4)
             self.assertTrue(lengthField.isValid())
             fieldcache = fieldmodule.createFieldcache()
             result, length = lengthField.evaluateReal(fieldcache, 1)
@@ -301,6 +304,97 @@ class GeneralTestCase(unittest.TestCase):
                 self.assertAlmostEqual(maxError, 0.04547098724783385, delta=TOL)
                 self.assertEqual(minElementIdentifier, 102)
                 self.assertAlmostEqual(minJacobian, 0.8073661446227143, delta=TOL)
+
+    def test_group_settings(self):
+        """
+        Test that curvature settings on parts of the model are appropriately used.
+        :return:
+        """
+        zinc_model_file_name = os.path.join(here, "resources", "group_test_line10.exf")
+
+        context = Context("Scaffoldfitter test group settings")
+        region = context.getDefaultRegion()
+        fitter = Fitter(region=region)
+        fitter.setDiagnosticLevel(2)
+
+        region.readFile(zinc_model_file_name)
+        fieldmodule = region.getFieldmodule()
+        mesh1d = fieldmodule.findMeshByDimension(1)
+        self.assertEqual(mesh1d.getSize(), 10)
+        coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
+        self.assertEqual(coordinates.getNumberOfComponents(), 3)
+        fitter.setModelCoordinatesField(coordinates)
+        all_group = fieldmodule.findFieldByName("all").castGroup()
+        part_group = fieldmodule.findFieldByName("part").castGroup()
+        zero_fibres = fieldmodule.createFieldConstant([0.0, 0.0, 0.0])
+        zero_fibres.setName("zero fibres")
+        zero_fibres.setManaged(True)
+        fitter.setFibreField(zero_fibres)
+        fitter.defineCommonMeshFields()
+
+        data_region = region.createChild("raw_data")
+        make_test_group_settings_data(data_region.getFieldmodule())
+        copy_fitting_data(region, data_region)
+        fitter.setDataCoordinatesField(coordinates)
+        fitter.defineDataProjectionFields()
+        fitter.initializeFit()
+
+        fit = FitterStepFit()
+        fitter.addFitterStep(fit)
+        fit.setGroupCurvaturePenalty(None, [0.01])
+        fit.setGroupCurvaturePenalty("part", [10.0])
+        fit.run()
+
+        # check correct curvature penalties are applied per element: the smaller "part" group penalties take precedence
+        fieldcache = fieldmodule.createFieldcache()
+        curvature_penalty = fieldmodule.findFieldByName("curvature_penalty")
+        self.assertTrue(curvature_penalty.isValid())
+        expected_curvature_penalties = [0.01, 0.01, 0.01, 0.01, 0.01, 10.0, 10.0, 10.0, 0.01, 0.01]
+        expected_coordinates = [
+            [0.5, 0.4780510817192079, 0.061844877202773374],
+            [1.5, -0.4798844161908709, 0.17041374538128035],
+            [2.5, 0.4698595597425159, 0.23730376789946722],
+            [3.5, -0.5124604803852486, 0.24629542592567483],
+            [4.5, 0.3546050329712843, 0.19562732940104102],
+            [5.5, -0.08683610995351383, 0.09241387186720304],
+            [6.5, 0.033064431519171385, -0.026357114228666476],
+            [7.5, -0.08741464996124625, -0.1395236301319323],
+            [8.5, 0.35829911353720506, -0.22552239670783675],
+            [9.5, -0.49872237642533174, -0.2500220113212905]]
+        for e in range(10):
+            element = mesh1d.findElementByIdentifier(e + 1)
+            fieldcache.setMeshLocation(element, [0.5])
+            result, cp = curvature_penalty.evaluateReal(fieldcache, 3)
+            self.assertEqual(result, RESULT_OK)
+            result, x = coordinates.evaluateReal(fieldcache, 3)
+            self.assertEqual(result, RESULT_OK)
+            for c in range(3):
+                self.assertAlmostEqual(cp[c], expected_curvature_penalties[e], delta=1.0E-8)
+                self.assertAlmostEqual(x[c], expected_coordinates[e][c], delta=1.0E-8)
+
+
+def make_test_group_settings_data(fieldmodule):
+    """
+    Make sinusoidal data centred on the x-axis from 0.0 to 10.0.
+    :param fieldmodule: Field module to create node points in, in group 'all'.
+    """
+    with ChangeManager(fieldmodule):
+        coordinates = find_or_create_field_coordinates(fieldmodule)
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        all_group = find_or_create_field_group(fieldmodule, 'all')
+        all_nodes = all_group.createNodesetGroup(nodes)
+
+        nodetemplate = nodes.createNodetemplate()
+        nodetemplate.defineField(coordinates)
+        fieldcache = fieldmodule.createFieldcache()
+        for n in range(1001):
+            x = 0.01 * n
+            y = 0.5 * math.sin(x * math.pi)
+            z = 0.25 * math.sin(0.5 * x)
+            node = all_nodes.createNode(n + 1, nodetemplate)
+            fieldcache.setNode(node)
+            coordinates.assignReal(fieldcache, [x, y, z])
+
 
 if __name__ == "__main__":
     unittest.main()

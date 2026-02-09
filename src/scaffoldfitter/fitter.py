@@ -470,7 +470,10 @@ class Fitter:
         with ChangeManager(data_fieldmodule):
             match_fitting_group_names(data_fieldmodule, self._fieldmodule,
                                       log_diagnostics=self.getDiagnosticLevel() > 0)
-            copy_fitting_data(self._region, self._rawDataRegion)
+            try:
+                copy_fitting_data(self._region, self._rawDataRegion)
+            except:
+                self.print_log()
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
 
@@ -695,17 +698,21 @@ class Fitter:
         coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
         strainComponents = meshDimension * meshDimension
         curvatureComponents = coordinatesCount * meshDimension * meshDimension
-        groups = []
+        groupInfoList = []
         # add None for default group
         for group in (getGroupList(self._fieldmodule) + [None]):
             if group:
+                if not group.isManaged():
+                    continue  # unmanaged = internal, ignore
                 meshGroup = group.getMeshGroup(mesh)
-                if (not meshGroup.isValid()) or (meshGroup.getSize() == 0):
+                meshGroupSize = meshGroup.getSize()
+                if (not meshGroup.isValid()) or (meshGroupSize == 0):
                     continue
                 groupName = group.getName()
             else:
                 meshGroup = None
                 groupName = None
+                meshGroupSize = mesh.getSize()
             groupStrainPenalty, setLocally, inheritable = \
                 fitterStepFit.getGroupStrainPenalty(groupName, strainComponents)
             groupStrainPenaltyNonZero = any((s > 0.0) for s in groupStrainPenalty)
@@ -714,8 +721,14 @@ class Fitter:
                 fitterStepFit.getGroupCurvaturePenalty(groupName, curvatureComponents)
             groupCurvaturePenaltyNonZero = any((s > 0.0) for s in groupCurvaturePenalty)
             groupCurvatureSet = setLocally or ((setLocally is False) and inheritable)
-            groups.append((group, groupName, meshGroup, groupStrainPenalty, groupStrainPenaltyNonZero, groupStrainSet,
-                           groupCurvaturePenalty, groupCurvaturePenaltyNonZero, groupCurvatureSet))
+            groupInfo = (group, groupName, meshGroup, meshGroupSize, groupStrainPenalty, groupStrainPenaltyNonZero,
+                         groupStrainSet, groupCurvaturePenalty, groupCurvaturePenaltyNonZero, groupCurvatureSet)
+            for index, tmpGroupInfo in enumerate(groupInfoList):
+                if meshGroupSize < tmpGroupInfo[3]:
+                    groupInfoList.insert(index, groupInfo)
+                    break
+            else:
+                groupInfoList.append(groupInfo)
         with ChangeManager(self._fieldmodule):
             self._deformActiveMeshGroup.removeAllElements()
             self._strainActiveMeshGroup.removeAllElements()
@@ -729,8 +742,9 @@ class Fitter:
                 strainPenaltyNonZero = False
                 curvaturePenalty = None
                 curvaturePenaltyNonZero = False
-                for (group, groupName, meshGroup, groupStrainPenalty, groupStrainPenaltyNonZero, groupStrainSet,
-                     groupCurvaturePenalty, groupCurvaturePenaltyNonZero, groupCurvatureSet) in groups:
+                for (group, groupName, meshGroup, meshGroupSize, groupStrainPenalty, groupStrainPenaltyNonZero,
+                     groupStrainSet, groupCurvaturePenalty, groupCurvaturePenaltyNonZero, groupCurvatureSet) \
+                        in groupInfoList:
                     if (not group) or meshGroup.containsElement(element):
                         if (not strainPenalty) and (groupStrainSet or (not group)):
                             strainPenalty = groupStrainPenalty
